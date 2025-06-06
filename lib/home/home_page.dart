@@ -1,7 +1,9 @@
+import 'package:classroom37/documents/pdf_viewer_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../auth/auth_service.dart';
+import 'package:classroom37/home/course_detail_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -102,7 +104,18 @@ class _HomePageState extends State<HomePage> {
                     horizontal: 16,
                   ),
                   onTap: () {
-                    // Acción al pulsar la tarjeta
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => CourseDetailPage(
+                          courseId:
+                              courses[index].id, // id del documento Firestore
+                          courseName:
+                              courseData['name'] ?? '', // nombre del curso
+                        ),
+                      ),
+                    );
+                  
                   },
                 ),
               );

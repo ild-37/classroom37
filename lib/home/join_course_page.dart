@@ -52,6 +52,7 @@ class _JoinCoursePageState extends State<JoinCoursePage> {
       final courseId = courseDoc.id;
       final courseData = courseDoc.data();
       final courseName = courseData['name'] ?? "Curso sin nombre";
+      print(courseData);
 
       final uid = _auth.currentUser?.uid;
       if (uid == null) {

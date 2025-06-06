@@ -3,6 +3,8 @@ import '../auth/login_page.dart';
 import '../auth/register_page.dart';
 import '../home/home_page.dart';
 import '../profile/profile_page.dart';
+import '../home/join_course_page.dart';
+import '../documents/pdf_viewer_page.dart';
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -18,6 +20,7 @@ class MyApp extends StatelessWidget {
         '/register': (context) => const RegisterPage(),
         '/home': (context) => const HomePage(),
         '/profile': (context) => const ProfilePage(),
+        '/join_course': (context) => const JoinCoursePage(),
       },
     );
   }
