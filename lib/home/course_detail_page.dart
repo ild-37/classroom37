@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:classroom37/documents/pdf_viewer_page.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:classroom37/documents/test_page.dart';
 
 class CourseDetailPage extends StatelessWidget {
   final String courseId;
@@ -126,22 +127,16 @@ class CourseDetailPage extends StatelessWidget {
                       leading: const Icon(Icons.description),
                       title: Text(name),
                       onTap: () {
-                        if (url != null) {
-                          if (url.toLowerCase().endsWith('.pdf')) {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    PdfViewerPage(url: url, title: name),
-                              ),
-                            );
-                          } else {
-                            launchUrl(
-                              Uri.parse(url),
-                              mode: LaunchMode.externalApplication,
-                            );
-                          }
-                        }
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => TestPage(
+                              courseId: courseId,
+                              examId: exams[index].id,
+                              examName: name,
+                            ),
+                          ),
+                        );
                       },
                     );
                   },
