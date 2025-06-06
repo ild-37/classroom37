@@ -54,9 +54,8 @@ class _JoinCoursePageState extends State<JoinCoursePage> {
       final courseName = courseData['name'] ?? "Curso sin nombre";
 
       final uid = _auth.currentUser?.uid;
-      final userEmail = _auth.currentUser?.email ?? "sin-email@ejemplo.com";
-
-      if (uid == null) {
+      final email = _auth.currentUser?.email;
+      if (uid == null || email == null) {
         setState(() {
           _error = "Usuario no autenticado";
           _loading = false;
@@ -64,45 +63,49 @@ class _JoinCoursePageState extends State<JoinCoursePage> {
         return;
       }
 
+      // Añadir curso a la subcolección 'courses' del usuario: solo id y nombre
       final userCourseRef = _db
           .collection('users')
           .doc(uid)
           .collection('courses')
           .doc(courseId);
 
-      // Comprobar si el usuario ya está inscrito en ese curso
-      final userCourseSnapshot = await userCourseRef.get();
-      if (userCourseSnapshot.exists) {
-        setState(() {
-          _error = '⚠️ Ya estás inscrito en este curso';
-          _loading = false;
-        });
-        return;
-      }
-
-      // Añadir curso a la subcolección 'courses' del usuario
       await userCourseRef.set({
         'name': courseName,
-        'qualification': 0,
-        'completed': false,
+        // No ponemos más datos aquí
       });
 
-      // Añadir estudiante a todos los exámenes del curso
+      // Obtener todos los exámenes del curso
       final examsQuery = await _db
           .collection('courses')
           .doc(courseId)
           .collection('exams')
           .get();
 
-      for (final examDoc in examsQuery.docs) {
-        final studentsRef = _db
+      final userCourseExamsRef = userCourseRef.collection('exams');
+
+      // Para cada examen, añadir en /users/{uid}/courses/{courseId}/exams/{examId}
+      for (var examDoc in examsQuery.docs) {
+        final examData = examDoc.data();
+        final examId = examDoc.id;
+        final examName = examData['name'] ?? 'Examen sin nombre';
+
+        await userCourseExamsRef.doc(examId).set({
+          'name': examName,
+          'qualification': 0,
+          'completed': false,
+        });
+
+        // Además, añadir al examen original la entrada en students
+        final studentExamRef = _db
             .collection('courses')
             .doc(courseId)
             .collection('exams')
-            .doc(examDoc.id)
-            .collection('students');
+            .doc(examId)
+            .collection('students')
+            .doc(email);
 
-        await studentsRef.add({'email': userEmail, 'qualification': 0});
+        await studentExamRef.set({'email': email, 'qualification': 0});
       }
 
       if (mounted) {
