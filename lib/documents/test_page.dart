@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class TestPage extends StatefulWidget {
   final String courseId;
@@ -88,7 +89,7 @@ class _TestPageState extends State<TestPage> {
               }),
               const SizedBox(height: 20),
               ElevatedButton(
-                onPressed: () {
+                onPressed: () async {
                   int correct = 0;
                   for (var q in questions) {
                     final data = q.data() as Map<String, dynamic>;
@@ -99,9 +100,49 @@ class _TestPageState extends State<TestPage> {
                     }
                   }
 
-                  double score = 0;
-                  if (questions.isNotEmpty) {
-                    score = (correct / questions.length) * 10;
+                  final score = (correct / questions.length) * 10;
+                  final user = FirebaseAuth.instance.currentUser;
+                  if (user == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Usuario no autenticado')),
+                    );
+                    return;
+                  }
+
+                  final studentId = user.uid;
+                  final firestore = FirebaseFirestore.instance;
+
+                  try {
+                    // Guardar en ruta pública del examen
+                    await firestore
+                        .collection('courses')
+                        .doc(widget.courseId)
+                        .collection('exams')
+                        .doc(widget.examId)
+                        .collection('students')
+                        .doc(studentId)
+                        .set({
+                          'qualification': score,
+                          'completed': true,
+                        }, SetOptions(merge: true));
+
+                    // Guardar en ruta privada del usuario
+                    await firestore
+                        .collection('users')
+                        .doc(studentId)
+                        .collection('courses')
+                        .doc(widget.courseId)
+                        .collection('exams')
+                        .doc(widget.examId)
+                        .set({
+                          'qualification': score,
+                          'completed': true,
+                        }, SetOptions(merge: true));
+                  } catch (e) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error guardando resultado: $e')),
+                    );
+                    return;
                   }
 
                   showDialog(
@@ -109,8 +150,7 @@ class _TestPageState extends State<TestPage> {
                     builder: (_) => AlertDialog(
                       title: const Text("Resultado"),
                       content: Text(
-                        "Puntuación: ${score.toStringAsFixed(1)} / 10\n"
-                        "Respuestas correctas: $correct de ${questions.length}",
+                        "Respuestas correctas: $correct de ${questions.length}\nNota: ${score.toStringAsFixed(2)} / 10",
                       ),
                       actions: [
                         TextButton(
