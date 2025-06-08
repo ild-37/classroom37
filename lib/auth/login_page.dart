@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // ← ESTA LÍNEA ES IMPORTANTE
 import '../auth/auth_service.dart';
 
 class LoginPage extends StatefulWidget {
@@ -18,8 +20,23 @@ class _LoginPageState extends State<LoginPage> {
       emailController.text,
       passwordController.text,
     );
+
     if (user != null && mounted) {
-      Navigator.pushReplacementNamed(context, '/home');
+      // Obtener el documento del usuario para saber su rol
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .get();
+
+      final roleId = userDoc.data()?['role_id'];
+
+      // Redirigir según el rol
+      if (roleId == 2) {
+        Navigator.pushReplacementNamed(context, '/home_teacher');
+      } else {
+        Navigator.pushReplacementNamed(context, '/home');
+      }
     }
   }
 

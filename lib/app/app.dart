@@ -4,7 +4,6 @@ import '../auth/register_page.dart';
 import '../home/home_page.dart';
 import '../profile/profile_page.dart';
 import '../home/join_course_page.dart';
-import '../documents/pdf_viewer_page.dart';
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
