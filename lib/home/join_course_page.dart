@@ -63,17 +63,24 @@ class _JoinCoursePageState extends State<JoinCoursePage> {
         return;
       }
 
-      // Añadir curso a la subcolección 'courses' del usuario: solo id y nombre
       final userCourseRef = _db
           .collection('users')
           .doc(uid)
           .collection('courses')
           .doc(courseId);
 
-      await userCourseRef.set({
-        'name': courseName,
-        // No ponemos más datos aquí
-      });
+      // Comprobación: ¿ya existe el curso para este usuario?
+      final userCourseSnap = await userCourseRef.get();
+      if (userCourseSnap.exists) {
+        setState(() {
+          _error = "⚠️ Ya estás inscrito en este curso.";
+          _loading = false;
+        });
+        return;
+      }
+
+      // Añadir curso a la subcolección 'courses' del usuario
+      await userCourseRef.set({'name': courseName});
 
       // Obtener todos los exámenes del curso
       final examsQuery = await _db
@@ -84,7 +91,7 @@ class _JoinCoursePageState extends State<JoinCoursePage> {
 
       final userCourseExamsRef = userCourseRef.collection('exams');
 
-      // Para cada examen, añadir en /users/{uid}/courses/{courseId}/exams/{examId}
+      // Añadir cada examen al usuario y al curso original
       for (var examDoc in examsQuery.docs) {
         final examData = examDoc.data();
         final examId = examDoc.id;
@@ -96,16 +103,19 @@ class _JoinCoursePageState extends State<JoinCoursePage> {
           'completed': false,
         });
 
-        // Además, añadir al examen original la entrada en students
         final studentExamRef = _db
             .collection('courses')
             .doc(courseId)
             .collection('exams')
             .doc(examId)
             .collection('students')
-            .doc(email);
+            .doc(uid);
 
-        await studentExamRef.set({'email': email, 'qualification': 0});
+        await studentExamRef.set({
+          'email': email,
+          'qualification': 0,
+          'completed': false,
+        });
       }
 
       if (mounted) {
