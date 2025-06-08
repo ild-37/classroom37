@@ -3,7 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:classroom37/documents/pdf_viewer_page.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:classroom37/documents/test_page.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 class CourseDetailPage extends StatelessWidget {
   final String courseId;
@@ -17,6 +16,8 @@ class CourseDetailPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    print('CourseDetailPage: courseId=$courseId'); // Debug courseId
+
     final documentsRef = FirebaseFirestore.instance
         .collection('courses')
         .doc(courseId)
@@ -27,162 +28,176 @@ class CourseDetailPage extends StatelessWidget {
         .doc(courseId)
         .collection('exams');
 
-    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final courseDocRef = FirebaseFirestore.instance
+        .collection('courses')
+        .doc(courseId);
 
     return DefaultTabController(
       length: 2,
       child: Scaffold(
         appBar: AppBar(
           title: Text(courseName),
-          bottom: const TabBar(
-            tabs: [
-              Tab(text: 'Documentos', icon: Icon(Icons.picture_as_pdf)),
-              Tab(text: 'Exámenes', icon: Icon(Icons.assignment)),
-            ],
-          ),
+          // No bottom: TabBar here
         ),
-        body: TabBarView(
+        body: Column(
           children: [
-            // TAB 1: DOCUMENTOS
-            StreamBuilder<QuerySnapshot>(
-              stream: documentsRef.snapshots(),
+            // Desplegable con info del curso
+            StreamBuilder<DocumentSnapshot>(
+              stream: courseDocRef.snapshots(),
               builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return const LinearProgressIndicator();
+                }
                 if (snapshot.hasError) {
-                  return const Center(
-                    child: Text('Error al cargar documentos'),
+                  return const Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: Text('Error al cargar datos del curso'),
                   );
                 }
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
 
-                final docs = snapshot.data!.docs;
-                if (docs.isEmpty) {
-                  return const Center(child: Text('No hay documentos'));
-                }
+                final data = snapshot.data!.data() as Map<String, dynamic>;
+                final master = data['master'] ?? 'Desconocido';
+                final cd = data['cd']?.toString() ?? 'N/A';
+                final description = data['description'] ?? 'Sin descripción';
 
-                return ListView.builder(
-                  itemCount: docs.length,
-                  itemBuilder: (context, index) {
-                    final data = docs[index].data() as Map<String, dynamic>;
-                    final name = data['name'] ?? 'Sin nombre';
-                    final route = data['route'];
-
-                    if (route == null) return const SizedBox.shrink();
-
-                    return ListTile(
-                      leading: const Icon(Icons.picture_as_pdf),
-                      title: Text(name),
-                      onTap: () {
-                        if (route.toLowerCase().endsWith('.pdf')) {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  PdfViewerPage(url: route, title: name),
-                            ),
-                          );
-                        } else {
-                          launchUrl(
-                            Uri.parse(route),
-                            mode: LaunchMode.externalApplication,
-                          );
-                        }
-                      },
-                    );
-                  },
+                return ExpansionTile(
+                  title: const Text('Información del curso'),
+                  children: [
+                    ListTile(
+                      leading: const Icon(Icons.email),
+                      title: Text('Profesor: $master'),
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.code),
+                      title: Text('Código: $cd'),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      child: Text(
+                        'Descripción:\n$description',
+                        style: const TextStyle(fontStyle: FontStyle.italic),
+                      ),
+                    ),
+                  ],
                 );
               },
             ),
 
-            // TAB 2: EXÁMENES con nota al lado
-            StreamBuilder<QuerySnapshot>(
-              stream: examsRef.snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return const Center(child: Text('Error al cargar exámenes'));
-                }
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
+            // TabBar justo debajo del desplegable
+            const TabBar(
+              tabs: [
+                Tab(text: 'Documentos', icon: Icon(Icons.picture_as_pdf)),
+                Tab(text: 'Exámenes', icon: Icon(Icons.assignment)),
+              ],
+            ),
 
-                final exams = snapshot.data!.docs;
-                if (exams.isEmpty) {
-                  return const Center(child: Text('No hay exámenes'));
-                }
-
-                if (uid == null) {
-                  return const Center(child: Text('Usuario no autenticado'));
-                }
-
-                return ListView.builder(
-                  itemCount: exams.length,
-                  itemBuilder: (context, index) {
-                    final examDoc = exams[index];
-                    final examData = examDoc.data() as Map<String, dynamic>;
-                    final examName = examData['name'] ?? 'Sin nombre';
-                    final examId = examDoc.id;
-
-                    // Documento con la nota de este examen para el usuario
-                    final gradeDocRef = FirebaseFirestore.instance
-                        .collection('users')
-                        .doc(uid)
-                        .collection('courses')
-                        .doc(courseId)
-                        .collection('exams')
-                        .doc(examId);
-
-                    return FutureBuilder<DocumentSnapshot>(
-                      future: gradeDocRef.get(),
-                      builder: (context, gradeSnapshot) {
-                        String? qualificationText;
-
-                        if (gradeSnapshot.hasData &&
-                            gradeSnapshot.data!.exists) {
-                          final gradeData =
-                              gradeSnapshot.data!.data()
-                                  as Map<String, dynamic>?;
-
-                          if (gradeData != null &&
-                              gradeData.containsKey('qualification')) {
-                            qualificationText = gradeData['qualification']
-                                .toString();
-                          }
-                        }
-
-                        return ListTile(
-                          leading: const Icon(Icons.description),
-                          title: Text(examName),
-                          trailing: qualificationText != null
-                              ? Text(
-                                  qualificationText,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.green,
-                                  ),
-                                )
-                              : const Text(
-                                  'Sin nota',
-                                  style: TextStyle(color: Colors.grey),
-                                ),
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => TestPage(
-                                  courseId: courseId,
-                                  examId: examId,
-                                  examName: examName,
-                                ),
-                              ),
-                            );
-                          },
+            // Contenido de las pestañas
+            Expanded(
+              child: TabBarView(
+                children: [
+                  // TAB 1: DOCUMENTOS
+                  StreamBuilder<QuerySnapshot>(
+                    stream: documentsRef.snapshots(),
+                    builder: (context, snapshot) {
+                      if (snapshot.hasError) {
+                        return const Center(
+                          child: Text('Error al cargar documentos'),
                         );
-                      },
-                    );
-                  },
-                );
-              },
+                      }
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+
+                      final docs = snapshot.data!.docs;
+                      if (docs.isEmpty) {
+                        return const Center(child: Text('No hay documentos'));
+                      }
+
+                      return ListView.builder(
+                        itemCount: docs.length,
+                        itemBuilder: (context, index) {
+                          final data =
+                              docs[index].data() as Map<String, dynamic>;
+                          final name = data['name'] ?? 'Sin nombre';
+                          final route = data['route'];
+
+                          if (route == null) return const SizedBox.shrink();
+
+                          return ListTile(
+                            leading: const Icon(Icons.picture_as_pdf),
+                            title: Text(name),
+                            onTap: () {
+                              if (route.toLowerCase().endsWith('.pdf')) {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        PdfViewerPage(url: route, title: name),
+                                  ),
+                                );
+                              } else {
+                                launchUrl(
+                                  Uri.parse(route),
+                                  mode: LaunchMode.externalApplication,
+                                );
+                              }
+                            },
+                          );
+                        },
+                      );
+                    },
+                  ),
+
+                  // TAB 2: EXÁMENES
+                  StreamBuilder<QuerySnapshot>(
+                    stream: examsRef.snapshots(),
+                    builder: (context, snapshot) {
+                      if (snapshot.hasError) {
+                        return const Center(
+                          child: Text('Error al cargar exámenes'),
+                        );
+                      }
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+
+                      final exams = snapshot.data!.docs;
+                      if (exams.isEmpty) {
+                        return const Center(child: Text('No hay exámenes'));
+                      }
+
+                      return ListView.builder(
+                        itemCount: exams.length,
+                        itemBuilder: (context, index) {
+                          final data =
+                              exams[index].data() as Map<String, dynamic>;
+                          final name = data['name'] ?? 'Sin nombre';
+
+                          return ListTile(
+                            leading: const Icon(Icons.description),
+                            title: Text(name),
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => TestPage(
+                                    courseId: courseId,
+                                    examId: exams[index].id,
+                                    examName: name,
+                                  ),
+                                ),
+                              );
+                            },
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ],
+              ),
             ),
           ],
         ),

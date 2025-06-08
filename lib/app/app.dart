@@ -4,6 +4,8 @@ import '../auth/register_page.dart';
 import '../home/home_page.dart';
 import '../profile/profile_page.dart';
 import '../home/join_course_page.dart';
+import '../home_teacher/home_teacher.dart';
+import '../home_teacher/create_course_page.dart';
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -20,6 +22,8 @@ class MyApp extends StatelessWidget {
         '/home': (context) => const HomePage(),
         '/profile': (context) => const ProfilePage(),
         '/join_course': (context) => const JoinCoursePage(),
+        '/home_teacher': (context) => const HomeTeacher(),
+        '/create_course': (context) => const CreateCoursePage(),
       },
     );
   }

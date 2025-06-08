@@ -113,6 +113,9 @@ class _ChangeRolePageState extends State<ChangeRolePage> {
                   ? const CircularProgressIndicator()
                   : const Text("Verificar y Cambiar Rol"),
             ),
+            const Text(
+              "Una vez cambies de rol cierra sesion para aplicar el cambio",
+            ),
           ],
         ),
       ),

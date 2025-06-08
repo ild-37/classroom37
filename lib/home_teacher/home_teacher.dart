@@ -1,107 +1,86 @@
-import 'package:classroom37/documents/pdf_viewer_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../auth/auth_service.dart';
-import 'package:classroom37/home/course_detail_page.dart';
+import 'course_detail_page.dart';
 
-class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+class HomeTeacher extends StatefulWidget {
+  const HomeTeacher({super.key});
 
   @override
-  State<HomePage> createState() => _HomePageState();
+  State<HomeTeacher> createState() => _HomeTeacherState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomeTeacherState extends State<HomeTeacher> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  Future<void> _leaveCourse(String courseId) async {
-    final uid = _auth.currentUser?.uid;
-    if (uid == null) return;
-
+  Future<void> _deleteCourse(String courseId) async {
     try {
-      // Eliminar subcolección de exámenes del usuario
-      final examsSnapshot = await _db
-          .collection('users')
-          .doc(uid)
+      // Eliminar subcolecciones de documents
+      final documents = await _db
+          .collection('courses')
+          .doc(courseId)
+          .collection('documents')
+          .get();
+      for (final doc in documents.docs) {
+        await doc.reference.delete();
+      }
+
+      // Eliminar exámenes y subcolección students
+      final exams = await _db
           .collection('courses')
           .doc(courseId)
           .collection('exams')
           .get();
-
-      for (final doc in examsSnapshot.docs) {
-        final examId = doc.id;
-
-        // Borrar /users/{uid}/courses/{courseId}/exams/{examId}
-        await _db
-            .collection('users')
-            .doc(uid)
-            .collection('courses')
-            .doc(courseId)
-            .collection('exams')
-            .doc(examId)
-            .delete();
-
-        // Borrar /courses/{courseId}/exams/{examId}/students/{uid}
-        await _db
-            .collection('courses')
-            .doc(courseId)
-            .collection('exams')
-            .doc(examId)
-            .collection('students')
-            .doc(uid)
-            .delete();
+      for (final exam in exams.docs) {
+        final students = await exam.reference.collection('students').get();
+        for (final student in students.docs) {
+          await student.reference.delete();
+        }
+        await exam.reference.delete();
       }
 
-      // Borrar el curso del usuario
-      await _db
-          .collection('users')
-          .doc(uid)
-          .collection('courses')
-          .doc(courseId)
-          .delete();
+      // Borrar el curso
+      await _db.collection('courses').doc(courseId).delete();
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('🚪 Te has salido del curso')),
+        const SnackBar(content: Text('✅ Curso eliminado correctamente')),
       );
     } catch (e) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('❌ Error al salir del curso: $e')));
+      ).showSnackBar(SnackBar(content: Text('❌ Error al eliminar curso: $e')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final authService = AuthService();
-    final uid = _auth.currentUser?.uid;
+    final email = _auth.currentUser?.email;
 
-    if (uid == null) {
-      return Scaffold(body: Center(child: Text('Usuario no autenticado')));
+    if (email == null) {
+      return const Scaffold(
+        body: Center(child: Text('Usuario no autenticado')),
+      );
     }
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: const Color.fromARGB(255, 78, 2, 122),
+        backgroundColor: const Color.fromARGB(255, 1, 77, 30),
         title: const Text(
-          "Inicio",
-          style: TextStyle(
-            color: Color.fromARGB(244, 247, 245, 245),
-            fontWeight: FontWeight.bold,
-          ),
+          "Mis Cursos",
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.person),
-            color: Color.fromARGB(244, 247, 245, 245),
+            icon: const Icon(Icons.person, color: Colors.white),
             onPressed: () {
               Navigator.pushNamed(context, '/profile');
             },
           ),
           IconButton(
-            icon: const Icon(Icons.logout),
-            color: Color.fromARGB(244, 247, 245, 245),
+            icon: const Icon(Icons.logout, color: Colors.white),
             onPressed: () async {
               await authService.logout();
               if (context.mounted) {
@@ -113,9 +92,8 @@ class _HomePageState extends State<HomePage> {
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: _db
-            .collection('users')
-            .doc(uid)
             .collection('courses')
+            .where('master', isEqualTo: email)
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
@@ -129,9 +107,7 @@ class _HomePageState extends State<HomePage> {
           final courses = snapshot.data?.docs ?? [];
 
           if (courses.isEmpty) {
-            return const Center(
-              child: Text('No estás inscrito en ningún curso.'),
-            );
+            return const Center(child: Text('No has creado ningún curso.'));
           }
 
           return ListView.builder(
@@ -155,9 +131,9 @@ class _HomePageState extends State<HomePage> {
                   return await showDialog<bool>(
                     context: context,
                     builder: (ctx) => AlertDialog(
-                      title: const Text("¿Salir del curso?"),
+                      title: const Text("¿Eliminar curso?"),
                       content: const Text(
-                        "Se eliminarán todos tus datos asociados a este curso.",
+                        "Esto eliminará todos los documentos y exámenes relacionados.",
                       ),
                       actions: [
                         TextButton(
@@ -165,7 +141,7 @@ class _HomePageState extends State<HomePage> {
                           onPressed: () => Navigator.of(ctx).pop(false),
                         ),
                         TextButton(
-                          child: const Text("Salir"),
+                          child: const Text("Eliminar"),
                           onPressed: () => Navigator.of(ctx).pop(true),
                         ),
                       ],
@@ -173,7 +149,7 @@ class _HomePageState extends State<HomePage> {
                   );
                 },
                 onDismissed: (_) async {
-                  await _leaveCourse(courseDoc.id);
+                  await _deleteCourse(courseDoc.id);
                 },
                 child: Card(
                   margin: const EdgeInsets.symmetric(
@@ -215,10 +191,10 @@ class _HomePageState extends State<HomePage> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          Navigator.pushNamed(context, '/join_course');
+          Navigator.pushNamed(context, '/create_course');
         },
         child: const Icon(Icons.add),
-        tooltip: 'Unirse a un curso',
+        tooltip: 'Crear nuevo curso',
       ),
     );
   }
