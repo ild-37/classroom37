@@ -3,7 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:classroom37/documents/pdf_viewer_page.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:classroom37/documents/test_page.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 class CourseDetailPage extends StatelessWidget {
   final String courseId;
@@ -17,6 +16,8 @@ class CourseDetailPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    print('CourseDetailPage: courseId=$courseId'); // Debug courseId
+
     final documentsRef = FirebaseFirestore.instance
         .collection('courses')
         .doc(courseId)
@@ -26,8 +27,6 @@ class CourseDetailPage extends StatelessWidget {
         .collection('courses')
         .doc(courseId)
         .collection('exams');
-
-    final uid = FirebaseAuth.instance.currentUser?.uid;
 
     return DefaultTabController(
       length: 2,
@@ -95,7 +94,7 @@ class CourseDetailPage extends StatelessWidget {
               },
             ),
 
-            // TAB 2: EXÁMENES con nota al lado
+            // TAB 2: EXÁMENES
             StreamBuilder<QuerySnapshot>(
               stream: examsRef.snapshots(),
               builder: (context, snapshot) {
@@ -107,76 +106,36 @@ class CourseDetailPage extends StatelessWidget {
                 }
 
                 final exams = snapshot.data!.docs;
+                print(
+                  'Exámenes recibidos: ${exams.length}',
+                ); // Debug cantidad exámenes
+
                 if (exams.isEmpty) {
                   return const Center(child: Text('No hay exámenes'));
-                }
-
-                if (uid == null) {
-                  return const Center(child: Text('Usuario no autenticado'));
                 }
 
                 return ListView.builder(
                   itemCount: exams.length,
                   itemBuilder: (context, index) {
-                    final examDoc = exams[index];
-                    final examData = examDoc.data() as Map<String, dynamic>;
-                    final examName = examData['name'] ?? 'Sin nombre';
-                    final examId = examDoc.id;
+                    final data = exams[index].data() as Map<String, dynamic>;
+                    print('Examen #$index: $data'); // Debug contenido examen
 
-                    // Documento con la nota de este examen para el usuario
-                    final gradeDocRef = FirebaseFirestore.instance
-                        .collection('users')
-                        .doc(uid)
-                        .collection('courses')
-                        .doc(courseId)
-                        .collection('exams')
-                        .doc(examId);
+                    final name = data['name'] ?? 'Sin nombre';
+                    final url = data['url'];
 
-                    return FutureBuilder<DocumentSnapshot>(
-                      future: gradeDocRef.get(),
-                      builder: (context, gradeSnapshot) {
-                        String? qualificationText;
-
-                        if (gradeSnapshot.hasData &&
-                            gradeSnapshot.data!.exists) {
-                          final gradeData =
-                              gradeSnapshot.data!.data()
-                                  as Map<String, dynamic>?;
-
-                          if (gradeData != null &&
-                              gradeData.containsKey('qualification')) {
-                            qualificationText = gradeData['qualification']
-                                .toString();
-                          }
-                        }
-
-                        return ListTile(
-                          leading: const Icon(Icons.description),
-                          title: Text(examName),
-                          trailing: qualificationText != null
-                              ? Text(
-                                  qualificationText,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.green,
-                                  ),
-                                )
-                              : const Text(
-                                  'Sin nota',
-                                  style: TextStyle(color: Colors.grey),
-                                ),
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => TestPage(
-                                  courseId: courseId,
-                                  examId: examId,
-                                  examName: examName,
-                                ),
-                              ),
-                            );
-                          },
+                    return ListTile(
+                      leading: const Icon(Icons.description),
+                      title: Text(name),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => TestPage(
+                              courseId: courseId,
+                              examId: exams[index].id,
+                              examName: name,
+                            ),
+                          ),
                         );
                       },
                     );
