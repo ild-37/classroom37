@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:classroom37/documents/pdf_viewer_page.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:classroom37/documents/test_page.dart';
@@ -16,8 +17,6 @@ class CourseDetailPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    print('CourseDetailPage: courseId=$courseId'); // Debug courseId
-
     final documentsRef = FirebaseFirestore.instance
         .collection('courses')
         .doc(courseId)
@@ -28,77 +27,24 @@ class CourseDetailPage extends StatelessWidget {
         .doc(courseId)
         .collection('exams');
 
-    final courseDocRef = FirebaseFirestore.instance
-        .collection('courses')
-        .doc(courseId);
+    final userId = FirebaseAuth.instance.currentUser?.uid;
 
     return DefaultTabController(
       length: 2,
       child: Scaffold(
-        appBar: AppBar(
-          title: Text(courseName),
-          // No bottom: TabBar here
-        ),
+        appBar: AppBar(title: Text(courseName)),
         body: Column(
           children: [
-            // Desplegable con info del curso
-            StreamBuilder<DocumentSnapshot>(
-              stream: courseDocRef.snapshots(),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) {
-                  return const LinearProgressIndicator();
-                }
-                if (snapshot.hasError) {
-                  return const Padding(
-                    padding: EdgeInsets.all(8.0),
-                    child: Text('Error al cargar datos del curso'),
-                  );
-                }
-
-                final data = snapshot.data!.data() as Map<String, dynamic>;
-                final master = data['master'] ?? 'Desconocido';
-                final cd = data['cd']?.toString() ?? 'N/A';
-                final description = data['description'] ?? 'Sin descripción';
-
-                return ExpansionTile(
-                  title: const Text('Información del curso'),
-                  children: [
-                    ListTile(
-                      leading: const Icon(Icons.email),
-                      title: Text('Profesor: $master'),
-                    ),
-                    ListTile(
-                      leading: const Icon(Icons.code),
-                      title: Text('Código: $cd'),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      child: Text(
-                        'Descripción:\n$description',
-                        style: const TextStyle(fontStyle: FontStyle.italic),
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
-
-            // TabBar justo debajo del desplegable
             const TabBar(
               tabs: [
                 Tab(text: 'Documentos', icon: Icon(Icons.picture_as_pdf)),
                 Tab(text: 'Exámenes', icon: Icon(Icons.assignment)),
               ],
             ),
-
-            // Contenido de las pestañas
             Expanded(
               child: TabBarView(
                 children: [
-                  // TAB 1: DOCUMENTOS
+                  // Pestaña Documentos
                   StreamBuilder<QuerySnapshot>(
                     stream: documentsRef.snapshots(),
                     builder: (context, snapshot) {
@@ -112,9 +58,8 @@ class CourseDetailPage extends StatelessWidget {
                       }
 
                       final docs = snapshot.data!.docs;
-                      if (docs.isEmpty) {
+                      if (docs.isEmpty)
                         return const Center(child: Text('No hay documentos'));
-                      }
 
                       return ListView.builder(
                         itemCount: docs.length,
@@ -151,7 +96,7 @@ class CourseDetailPage extends StatelessWidget {
                     },
                   ),
 
-                  // TAB 2: EXÁMENES
+                  // Pestaña Exámenes con nota del usuario
                   StreamBuilder<QuerySnapshot>(
                     stream: examsRef.snapshots(),
                     builder: (context, snapshot) {
@@ -165,30 +110,61 @@ class CourseDetailPage extends StatelessWidget {
                       }
 
                       final exams = snapshot.data!.docs;
-                      if (exams.isEmpty) {
+                      if (exams.isEmpty)
                         return const Center(child: Text('No hay exámenes'));
-                      }
 
                       return ListView.builder(
                         itemCount: exams.length,
                         itemBuilder: (context, index) {
-                          final data =
+                          final examData =
                               exams[index].data() as Map<String, dynamic>;
-                          final name = data['name'] ?? 'Sin nombre';
+                          final examName = examData['name'] ?? 'Sin nombre';
+                          final examId = exams[index].id;
 
-                          return ListTile(
-                            leading: const Icon(Icons.description),
-                            title: Text(name),
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => TestPage(
-                                    courseId: courseId,
-                                    examId: exams[index].id,
-                                    examName: name,
-                                  ),
-                                ),
+                          return FutureBuilder<DocumentSnapshot>(
+                            future: userId == null
+                                ? Future.value(null)
+                                : FirebaseFirestore.instance
+                                      .collection('courses')
+                                      .doc(courseId)
+                                      .collection('exams')
+                                      .doc(examId)
+                                      .collection('students')
+                                      .doc(userId)
+                                      .get(),
+                            builder: (context, snapshotNota) {
+                              String qualificationText = 'Sin nota';
+                              if (snapshotNota.connectionState ==
+                                  ConnectionState.waiting) {
+                                qualificationText = 'Cargando nota...';
+                              } else if (snapshotNota.hasData &&
+                                  snapshotNota.data!.exists) {
+                                final studentData =
+                                    snapshotNota.data!.data()
+                                        as Map<String, dynamic>?;
+                                final qualification =
+                                    studentData?['qualification'];
+                                if (qualification != null) {
+                                  qualificationText = 'Nota: $qualification';
+                                }
+                              }
+
+                              return ListTile(
+                                leading: const Icon(Icons.description),
+                                title: Text(examName),
+                                subtitle: Text(qualificationText),
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => TestPage(
+                                        courseId: courseId,
+                                        examId: examId,
+                                        examName: examName,
+                                      ),
+                                    ),
+                                  );
+                                },
                               );
                             },
                           );
