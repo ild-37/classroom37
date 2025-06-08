@@ -17,6 +17,9 @@ class CourseDetailPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final courseRef = FirebaseFirestore.instance
+        .collection('courses')
+        .doc(courseId);
     final documentsRef = FirebaseFirestore.instance
         .collection('courses')
         .doc(courseId)
@@ -35,6 +38,44 @@ class CourseDetailPage extends StatelessWidget {
         appBar: AppBar(title: Text(courseName)),
         body: Column(
           children: [
+            StreamBuilder<DocumentSnapshot>(
+              stream: courseRef.snapshots(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return const LinearProgressIndicator();
+                }
+                if (snapshot.hasError) {
+                  return const Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: Text('Error al cargar datos del curso'),
+                  );
+                }
+
+                final data = snapshot.data!.data() as Map<String, dynamic>;
+                final master = data['master'] ?? 'Desconocido';
+                final cd = data['cd']?.toString() ?? 'N/A';
+                final description = data['description'] ?? 'Sin descripción';
+
+                return Card(
+                  margin: const EdgeInsets.all(8),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Profesor: $master',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        Text('Código del curso: $cd'),
+                        const SizedBox(height: 6),
+                        Text('Descripción:\n$description'),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
             const TabBar(
               tabs: [
                 Tab(text: 'Documentos', icon: Icon(Icons.picture_as_pdf)),
