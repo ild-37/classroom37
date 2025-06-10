@@ -145,7 +145,7 @@ class CourseDetailPage extends StatelessWidget {
                                   return const SizedBox.shrink();
 
                                 return ListTile(
-                                  leading: const Icon(Icons.picture_as_pdf),
+                                  leading: const Icon(Icons.insert_drive_file),
                                   title: Text(name),
                                   trailing: PopupMenuButton<String>(
                                     onSelected: (value) {
